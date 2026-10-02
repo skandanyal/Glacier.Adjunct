@@ -1,0 +1,11 @@
+feature1,feature2,feature3,feature4,label
+1.2,3.4,0.5,2.1,Positive
+2.5,1.1,1.8,0.9,Negative
+0.8,4.2,2.3,3.0,Positive
+3.1,2.0,0.2,1.5,Positive
+1.7,3.1,1.1,2.4,Positive
+4.0,0.5,3.2,1.0,Negative
+2.2,2.8,0.9,3.5,Positive
+0.5,1.9,2.7,0.8,Negative
+3.8,3.3,1.4,2.2,Positive
+1.9,0.8,3.0,1.7,Negative

@@ -1,0 +1,29 @@
+# Build directories
+build/
+cmake-build-debug/
+cmake-build-release/
+
+# Third-party / vendored benchmarks
+nanobench-4.6.0/
+nanobench-4.6.0
+*.o
+nanobench.o
+
+# IDE & Editor settings
+.idea/
+.vscode/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Logs & temporary files
+error.txt
+*.log
+exp1.cpp
+exp2.cpp
+main.cpp
+mlpack_lr_release.md
+mlpack_LR_results.md
