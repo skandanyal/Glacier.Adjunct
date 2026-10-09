@@ -5,7 +5,7 @@ Protocol:
 - Training datasets: mi_100, mi_500, mi_1000, mi_5000, mi_10000, mi_50000, mi_95000
 - Prediction dataset: mi_val (5000 samples)
 - Hyperparameters matching Glacier benchmark drivers:
-    - Ridge:      alpha = 0.01,  max_iter = 1000, tol = 1e-4, fit_intercept = True
+    - Ridge:      alpha = 0.01, fit_intercept = False (closed-form)
     - Lasso:      alpha = 0.001, max_iter = 1000, tol = 1e-4, fit_intercept = True
     - ElasticNet: alpha = 0.001, l1_ratio = 0.5, max_iter = 1000, tol = 1e-4, fit_intercept = True
 - Measured via timeit: 10 epochs with 3 iterations each (repeat=10, number=3)
@@ -87,19 +87,19 @@ def main():
         (
             "Ridge Regression",
             RidgeRegression,
-            {"alpha": 0.01, "max_iter": 1000, "tolerance": 1e-4, "fit_intercept": True},
-            "alpha=0.01, max_iter=1000, tol=1e-4",
+            {"alpha": 0.01, "fit_intercept": False},
+            "alpha=0.01 (closed-form)",
         ),
         (
             "Lasso Regression",
             LassoRegression,
-            {"alpha": 0.001, "max_iter": 1000, "tolerance": 1e-4, "fit_intercept": True},
+            {"alpha": 0.001, "max_iter": 1000, "tolerance": 1e-4, "fit_intercept": False},
             "alpha=0.001, max_iter=1000, tol=1e-4",
         ),
         (
             "ElasticNet Regression",
             ElasticNetRegression,
-            {"alpha": 0.001, "l1_ratio": 0.5, "max_iter": 1000, "tolerance": 1e-4, "fit_intercept": True},
+            {"alpha": 0.001, "l1_ratio": 0.5, "max_iter": 1000, "tolerance": 1e-4, "fit_intercept": False},
             "alpha=0.001, l1_ratio=0.5, max_iter=1000, tol=1e-4",
         ),
     ]

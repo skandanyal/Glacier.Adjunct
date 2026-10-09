@@ -1,14 +1,13 @@
 # Wall-Time Performance Benchmarking: mlpack C++ vs. scikit-learn vs. Pure NumPy
 
-A rigorous, end-to-end wall-clock performance evaluation of linear regression algorithms (**Ordinary Least Squares**, 
-**Ridge $L_2$**, **Lasso $L_1$**, and **ElasticNet $L_1 + L_2$**) across three distinct software ecosystems and 
+A rigorous, end-to-end wall-clock performance evaluation of linear and logistic regression algorithms (**Ordinary Least Squares**, 
+**Ridge $L_2$**, **Lasso $L_1$**, **ElasticNet $L_1 + L_2$**, and **Binary Logistic Regression**) across three distinct software ecosystems and 
 algorithmic architectures:
 
 1. **mlpack C++** (v4.x, compiled with native `-O3 -march=native -ffast-math`, Armadillo BLAS/LAPACK backend, 
 `ankerl::nanobench`)
-2. **scikit-learn** (v1.9.0, OpenBLAS multi-threaded BLAS backend with Cython-compiled solvers, `timeit`)
-3. **Pure NumPy** (Glacier.ML.v2 algorithms in Python 3.12, vectorized NumPy operations and pure Python coordinate 
-descent, `timeit`)
+2. **scikit-learn** (v1.9.0, OpenBLAS multi-threaded BLAS backend with Cython/C-compiled solvers, `timeit`)
+3. **Pure NumPy** (Glacier.ML.v2 algorithms in Python 3.12, vectorized NumPy operations and pure Python solvers, `timeit`)
 
 ---
 
@@ -26,6 +25,7 @@ descent, `timeit`)
   - [8.2 Ridge Regression ($L_2$)](#82-ridge-regression-l_2)
   - [8.3 Lasso Regression ($L_1$)](#83-lasso-regression-l_1)
   - [8.4 ElasticNet Regression ($L_1 + L_2$)](#84-elasticnet-regression-l_1--l_2)
+  - [8.5 Logistic Regression (Binary Classification)](#85-logistic-regression-binary-classification)
 - [9. In-Depth Technical Insights & Analysis](#9-in-depth-technical-insights--analysis)
 - [10. Repository Structure](#10-repository-structure)
 - [11. Reproduction & Build Instructions](#11-reproduction--build-instructions)
@@ -268,7 +268,6 @@ ElasticNet models across mlpack C++, scikit-learn, and Pure NumPy.*
 ### 8.1 Ordinary Least Squares (OLS) Linear Regression
 
 Mean wall-clock time across 30 measured runs (10 epochs $\times$ 3 iterations):
-
 #### `Fit_intercept = True`
 
 | Dataset Rows | Features | mlpack C++ (`ms`) | Pure NumPy (`ms`) | scikit-learn (`ms`) | Fastest Implementation                            |
@@ -382,6 +381,37 @@ Hyperparameters: $\alpha = 0.001, l_1\text{\_ratio} = 0.5$ ($\lambda_1 = 0.0005,
 |  **10,000**  |    **24.258**     |       219.501       |     **mlpack C++**     |   mlpack 9.0x faster    |
 |  **50,000**  |    **283.086**    |      1355.426       |     **mlpack C++**     |   mlpack 4.8x faster    |
 |  **95,000**  |    **666.824**    |      3170.175       |     **mlpack C++**     |   mlpack 4.8x faster    |
+
+---
+
+### 8.5 Logistic Regression (Binary Classification)
+
+Evaluated on `cs_datasets` ($D = 10$ features) predicting on `cs_val_2.csv` (10,000 samples).  
+Hyperparameters: $\lambda = 0.01$ (or $C = 100$), `iterations / max_iter = 2000`, `tol = 1e-4`, `decision_boundary = 0.5`.
+
+#### `Fit_intercept = True`
+
+| Dataset Rows | mlpack C++ (`ms`) | Pure NumPy (`ms`) | scikit-learn (`ms`) | Fastest Implementation | mlpack vs. scikit-learn |  mlpack vs. NumPy  |
+|:------------:|:-----------------:|:-----------------:|:-------------------:|:----------------------:|:-----------------------:|:------------------:|
+|   **500**    |    **14.645**     |      28.599       |       221.822       |     **mlpack C++**     |   mlpack 15.1x faster   | mlpack 2.0x faster |
+|  **1,000**   |    **24.291**     |      37.038       |       246.374       |     **mlpack C++**     |   mlpack 10.1x faster   | mlpack 1.5x faster |
+|  **5,000**   |      124.719      |    **98.266**     |       496.130       |     **Pure NumPy**     |   mlpack 4.0x faster    | NumPy 1.3x faster  |
+|  **10,000**  |    **20.145**     |      170.978      |       786.764       |     **mlpack C++**     |   mlpack 39.1x faster   | mlpack 8.5x faster |
+|  **50,000**  |     1364.204      |   **1339.160**    |      36526.037      |     **Pure NumPy**     |   mlpack 26.8x faster   | NumPy 1.02x faster |
+| **100,000**  |     2863.692      |   **2678.972**    |      37601.643      |     **Pure NumPy**     |   mlpack 13.1x faster   | NumPy 1.07x faster |
+| **140,000**  |     4527.233      |   **4343.133**    |      39678.285      |     **Pure NumPy**     |   mlpack 8.8x faster    | NumPy 1.04x faster |
+
+#### `Fit_intercept = False`
+
+| Dataset Rows | mlpack C++ (`ms`) | Pure NumPy (`ms`) | scikit-learn (`ms`) | Fastest Implementation | mlpack vs. scikit-learn |  mlpack vs. NumPy   |
+|:------------:|:-----------------:|:-----------------:|:-------------------:|:----------------------:|:-----------------------:|:-------------------:|
+|   **500**    |    **16.182**     |      30.947       |       214.039       |     **mlpack C++**     |   mlpack 13.2x faster   | mlpack 1.9x faster  |
+|  **1,000**   |    **27.573**     |      39.124       |       209.215       |     **mlpack C++**     |   mlpack 7.6x faster    | mlpack 1.4x faster  |
+|  **5,000**   |      146.133      |    **112.891**    |       443.058       |     **Pure NumPy**     |   mlpack 3.0x faster    |  NumPy 1.3x faster  |
+|  **10,000**  |    **29.366**     |      201.070      |       410.255       |     **mlpack C++**     |   mlpack 14.0x faster   | mlpack 6.8x faster  |
+|  **50,000**  |   **1289.060**    |     1358.412      |      28269.286      |     **mlpack C++**     |   mlpack 21.9x faster   | mlpack 1.05x faster |
+| **100,000**  |   **2544.173**    |     2716.273      |      36123.179      |     **mlpack C++**     |   mlpack 14.2x faster   | mlpack 1.07x faster |
+| **140,000**  |     4379.119      |   **4351.577**    |      30752.479      |     **Pure NumPy**     |   mlpack 7.0x faster    | NumPy 1.01x faster  |
 
 ---
 

@@ -1,10 +1,11 @@
 """
-Ridge Regression implementation in pure NumPy matching Glacier.ML.v2.
+Ridge Regression implementation in pure NumPy matching Glacier.ML.v2 / closed-form formulation.
 
-Follows the exact Cyclic Coordinate Descent solver and centering approach from Glacier.ML.v2:
+Follows the closed-form normal equations:
+    (X^T * X + alpha * I) * weights = X^T * y
+and centering approach:
 - Glacier::Base::Regressor (data ingestion, mean and stddev tracking)
-- Glacier::Core::LinearModelsCore::regularized_train with l1_ratio=0.0, l2_ratio=1.0
-- Cyclic Coordinate Descent optimization with OpenBLAS-style residual update
+- Closed-form solution via linear solve (with least-squares fallback)
 - Glacier::Models::RidgeRegression (centering X and y with respect to intercept)
 """
 
@@ -14,17 +15,16 @@ import numpy as np
 
 class RidgeRegression:
     """
-    L2-regularized Ridge Regression implemented exactly as in Glacier.ML.v2.
-
-    Uses Cyclic Coordinate Descent with l1_ratio=0.0 and l2_ratio=1.0.
+    L2-regularized Ridge Regression using the closed-form solution:
+        (X^T * X + alpha * I) * weights = X^T * y
 
     Supports both Glacier C++ lifecycle:
         model = RidgeRegression(X, y)
-        model.train(fit_intercept=True, alpha=1.0, max_iter=1000, tolerance=1e-4)
+        model.train(fit_intercept=True, alpha=1.0)
         y_pred = model.predict(X_test)
 
     And standard Scikit-Learn style lifecycle:
-        model = RidgeRegression(alpha=1.0, max_iter=1000, tolerance=1e-4, fit_intercept=True)
+        model = RidgeRegression(alpha=1.0, fit_intercept=True)
         model.fit(X, y)
         y_pred = model.predict(X_test)
     """
@@ -34,14 +34,15 @@ class RidgeRegression:
         X: Optional[Union[np.ndarray, Sequence[Sequence[float]]]] = None,
         y: Optional[Union[np.ndarray, Sequence[float]]] = None,
         alpha: float = 0.01,
-        max_iter: int = 1000,
-        tolerance: float = 1e-4,
         fit_intercept: bool = True,
+        max_iter: Optional[int] = None,
+        tolerance: Optional[float] = None,
+        **kwargs,
     ):
         self.alpha_: float = alpha
-        self.max_iter_: int = max_iter
-        self.tolerance_: float = tolerance
         self.fit_intercept_: bool = fit_intercept
+        self.max_iter_: Optional[int] = max_iter
+        self.tolerance_: Optional[float] = tolerance
 
         self.weights_: Optional[np.ndarray] = None
         self.mean_y_: float = 0.0
@@ -100,26 +101,15 @@ class RidgeRegression:
         sd = np.sqrt(variance)
         self.std_dev_ = np.where(sd > 1e-8, sd, 1.0)
 
-    @staticmethod
-    def _soft_threshold(z: float, gamma: float) -> float:
-        """Soft-thresholding operator: sign(z) * max(0, |z| - gamma)."""
-        if z > gamma:
-            return z - gamma
-        if z < -gamma:
-            return z + gamma
-        return 0.0
-
     def train(
         self,
         fit_intercept: Optional[bool] = None,
         alpha: Optional[float] = None,
-        max_iter: Optional[int] = None,
-        tolerance: Optional[float] = None,
+        **kwargs,
     ) -> "RidgeRegression":
         """
-        Trains Ridge Regression using Cyclic Coordinate Descent.
-
-        Matches Glacier::Models::RidgeRegression::train(bool fit_intercept, Scalar_tr alpha, int max_iter, float tolerance)
+        Trains Ridge Regression using the closed-form normal equations:
+            (X^T * X + alpha * I) * weights = X^T * y
         """
         if self.x_ is None or self.y_ is None or self.nrows_ == 0 or self.ncols_ == 0:
             raise ValueError("Cannot train on an empty dataset.")
@@ -128,12 +118,8 @@ class RidgeRegression:
             self.fit_intercept_ = fit_intercept
         if alpha is not None:
             self.alpha_ = alpha
-        if max_iter is not None:
-            self.max_iter_ = max_iter
-        if tolerance is not None:
-            self.tolerance_ = tolerance
 
-        # Centering step matching RidgeR_impl.cpp
+        # Centering step matching RidgeR_impl.cpp / LinR_impl.cpp
         x_train = np.empty_like(self.x_, dtype=np.float64)
         y_train = self.y_.copy()
 
@@ -145,51 +131,17 @@ class RidgeRegression:
             x_train = self.x_.copy()
             self.mean_y_ = 0.0
 
-        # Core optimization: regularized_train with l1_ratio=0.0, l2_ratio=1.0
-        # matches Glacier::Core::LinearModelsCore::regularized_train
-        nsamples, nfeatures = x_train.shape
-        inv_N = 1.0 / nsamples
-        alpha_1 = self.alpha_ * 0.0  # l1_ratio = 0.0
-        alpha_2 = self.alpha_ * 1.0  # l2_ratio = 1.0
+        # Core closed-form execution: (X^T * X + alpha * I) * weights = X^T * y
+        nfeatures = x_train.shape[1]
+        XtX = x_train.T @ x_train
+        XtY = x_train.T @ y_train
+        A = XtX + self.alpha_ * np.eye(nfeatures, dtype=np.float64)
 
-        weights = np.zeros(nfeatures, dtype=np.float64)
-        residuals = y_train.copy()
+        try:
+            self.weights_ = np.linalg.solve(A, XtY)
+        except np.linalg.LinAlgError:
+            self.weights_, _, _, _ = np.linalg.lstsq(A, XtY, rcond=None)
 
-        # Precompute contiguous column arrays and column variances: v_j = (1/N) * ||X_j||^2
-        cols = [np.ascontiguousarray(x_train[:, col]) for col in range(nfeatures)]
-        variance = np.empty(nfeatures, dtype=np.float64)
-        for col in range(nfeatures):
-            variance[col] = inv_N * np.dot(cols[col], cols[col])
-
-        # Cyclic Coordinate Descent loop
-        for _ in range(self.max_iter_):
-            max_change = 0.0
-
-            for col in range(nfeatures):
-                if variance[col] == 0.0:
-                    continue
-
-                col_vec = cols[col]
-                old_weight = weights[col]
-
-                # Partial residual correlation: (1/N) * X_j^T * r
-                dot_xj_r = inv_N * np.dot(col_vec, residuals)
-                rho_j = dot_xj_r + (variance[col] * old_weight)
-
-                # Soft threshold update
-                new_weight = self._soft_threshold(rho_j, alpha_1) / (variance[col] + alpha_2)
-                delta_w = new_weight - old_weight
-
-                if delta_w != 0.0:
-                    weights[col] = new_weight
-                    # Residual update: r = r - delta_w * X_j
-                    residuals -= delta_w * col_vec
-                    max_change = max(max_change, abs(delta_w))
-
-            if max_change < self.tolerance_:
-                break
-
-        self.weights_ = weights
         self.training_complete_ = True
         return self
 
@@ -198,17 +150,15 @@ class RidgeRegression:
         X: Union[np.ndarray, Sequence[Sequence[float]]],
         y: Union[np.ndarray, Sequence[float]],
         alpha: Optional[float] = None,
-        max_iter: Optional[int] = None,
-        tolerance: Optional[float] = None,
         fit_intercept: Optional[bool] = None,
+        **kwargs,
     ) -> "RidgeRegression":
         """Scikit-Learn compatible training method."""
         self._init_data(X, y)
         return self.train(
             fit_intercept=fit_intercept,
             alpha=alpha,
-            max_iter=max_iter,
-            tolerance=tolerance,
+            **kwargs,
         )
 
     def predict(

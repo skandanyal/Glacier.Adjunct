@@ -48,3 +48,11 @@ target_compile_options(mlpack_linearRegression_exp2 PUBLIC
         $<$<CONFIG:Release,GRelease,Benchmark,GBenchmark>:-g -O3 -march=native -ffast-math>
 )
 
+add_executable(mlpack_logisticRegression_exp2 mlpack_logisticRegression/exp2.cpp)
+target_include_directories(mlpack_logisticRegression_exp2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} /usr/local/include)
+target_link_libraries(mlpack_logisticRegression_exp2 PRIVATE armadillo nanobench)
+target_compile_options(mlpack_logisticRegression_exp2 PUBLIC
+        $<$<CONFIG:Debug,GDebug>:-g -O0 -march=native>
+        $<$<CONFIG:Release,GRelease,Benchmark,GBenchmark>:-g -O3 -march=native -ffast-math>
+)
+
